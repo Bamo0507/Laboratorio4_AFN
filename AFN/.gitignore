@@ -1,0 +1,30 @@
+# Directorios de compilación y binarios
+/bin/
+/build/
+
+# Archivos de Gradle que se generan automáticamente
+.gradle/
+
+# Archivos de configuración específicos de máquina
+gradle-app.setting
+.gradle/
+
+# Archivos generados
+*.class
+*.log
+
+# Archivos de IDE (si usas IntelliJ/Android Studio por ejemplo)
+*.iml
+.idea/
+
+# Archivos de sistema
+.DS_Store
+
+# Otros temporales
+*.tmp
+
+gradle
+
+gradlew
+
+gradlew.bat
