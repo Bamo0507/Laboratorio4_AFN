@@ -536,7 +536,6 @@ fun buildNFA(tokens: List<String>): Fragment {
                 val fragment = when(token[0]){
                     '.' -> concatFragment(left, right)
                     '|' -> unionFragment(left, right)
-                    '*' -> kleeneFragment(left)
                     else -> error("Hubo un error")
                 }
 
@@ -654,7 +653,55 @@ fun generateNfaDot(nfa: Fragment): String {
     return sb.toString()
 }
 //////////////////////////////////////////////
+// (a*|b*)+
+val FirstRegexStringsTest = listOf(
+    "",
+    "a",
+    "b",
+    "ab"
+    "ba",
+    "aa",
+    "bb",
+    "aabbaaab",
+    "holamundo"
+)
 
+// ((ε|a)|b*)*
+val SecondRegexStringsTest = listOf(
+    "",
+    "a",
+    "b",
+    "ab",
+    "ba",
+    "aa",
+    "bb",
+    "aabbaaab",
+    "holamundo"
+)
+
+// (a|b)*abb(a|b)*
+val ThirdRegexStringsTest = listOf(
+    "", // NO
+    "abb",
+    "aaaabbbabbaaaabbb",
+    "holamundo"
+)
+
+// 0?(1?)?0*
+val FourthRegexStringsTest = listOf(
+    "",
+    "011", //NO
+    "010",
+    "010000",
+    "00000",
+    "1",
+    "0",
+    "holamundo",
+)
+//////////////////////////////////////////////
+
+
+//////////////////////////////////////////////
 fun main() {
     val file = File("src/main/kotlin/AFN.txt")
     val lines = file.readLines()
