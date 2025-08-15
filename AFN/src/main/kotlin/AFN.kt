@@ -28,6 +28,7 @@ fun getPrecedence(operatorChar: Char): Int {
 // Manejar clases
 // Metodo para retornar una clase tal cual como viene
 // y saber el indice en el que seguimos inmediatamente despues del ]
+// [abc] -> [a.b.c]
 fun readClass(pattern: String, startIndex: Int): Pair<String, Int> {
     val sb = StringBuilder()
     var i = startIndex
@@ -577,6 +578,7 @@ fun buildNFA(tokens: List<String>): Fragment {
                         val charSet = parseCharClass(token)
                         classFragment(charSet)
                     }
+                    
                     token.length == 1 -> {
                         literalFragment(token[0])
                     }
@@ -773,12 +775,17 @@ fun main() {
     // Cambiar ? a |ε
     // Cambiar + a aa*
     for (line in lines) {
-        var formattedLine = sustituirOpcional(line)
+        val noSpaces = line.filterNot(Char::isWhitespace)
+        var formattedLine = sustituirOpcional(noSpaces)
         formattedLine = sustituirMas(formattedLine)
         formattedLines.add(formattedLine)
     }
 
     println("Lineas formateadas: $formattedLines")
+
+    //Preaparar tests
+    val testFile = File("src/main/kotlin/AFN_Tests.txt")
+    val tests = testFile.readLines()
 
     // Construccion de AFN
     for((index, formattedLine) in formattedLines.withIndex()) {
@@ -799,11 +806,16 @@ fun main() {
         renderDot(dot, dotFile)
 
         // Testear cadenas
-        var test2Validate = Tests[index]
-        for(test in test2Validate){
+        // var test2Validate = Tests[index]
+        // for(test in test2Validate){
+        //     val result = acceptsString(nfa, test)
+        //     println("Cadena $test es ACEPTADA: ${if (result) "SÍ" else "NO"}")
+        // }
+        for(test in tests){
             val result = acceptsString(nfa, test)
             println("Cadena $test es ACEPTADA: ${if (result) "SÍ" else "NO"}")
         }
+
         println("----------------------------------------------------------")
     }
     

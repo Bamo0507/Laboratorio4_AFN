@@ -1,0 +1,17 @@
+
+a
+b
+ab
+ba
+aa
+bb
+aabbaaaab
+abb
+aaaabbbabbaaaabbb
+011
+010
+0100000
+0000000
+1
+0
+holamundo
