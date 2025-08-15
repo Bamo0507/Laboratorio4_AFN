@@ -21,11 +21,13 @@ cd AFN
 
 ### Video de Demostración
 
-
+https://youtu.be/O08RkppIdTY
 
 ## Pumping
 
 Adentro de la carpeta de `/Pumping` se encuentra la resolución completa del ejercicio 2.
 
 Link directo:
+
+https://github.com/Bamo0507/Laboratorio4_AFN/blob/master/Pumping/Pumping_lab4_250815_134259.pdf
 
