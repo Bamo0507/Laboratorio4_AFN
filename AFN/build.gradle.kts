@@ -16,5 +16,5 @@ dependencies {
 }
 
 application {
-  mainClass.set("AstKt")
+  mainClass.set("AFNKt")
 }

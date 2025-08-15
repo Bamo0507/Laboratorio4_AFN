@@ -102,7 +102,6 @@ fun formatRegex(rawRegex: String): String {
                     (nextChar !in ALL_OPERATORS) &&
                     (nextChar != '\\')
                 if (concatNecesaria) {
-                    println("Inserto concatenación '.' entre '$currentChar' y '$nextChar'")
                     formattedRegexBuilder.append('.')
                 }
             }
@@ -121,7 +120,6 @@ fun formatRegex(rawRegex: String): String {
                 (currentChar !in BINARY_OPERATORS) ||
                 (currentChar in UNARY_OPERATORS && (nextChar == '(' || nextChar == '\\' || (nextChar !in ALL_OPERATORS && nextChar != ')')))
             if (concatNecesaria) {
-                println("Inserto concatenación '.' entre '$currentChar' y '$nextChar'")
                 formattedRegexBuilder.append('.')
             }
         }
@@ -196,7 +194,7 @@ fun infixToPostfix(regex: String): String {
             else -> {
                 // Simbolo
                 postfixBuilder.append(currentChar)
-                i++
+                index++
             }
         }
     }
@@ -408,6 +406,7 @@ data class Fragment(
 object NfaId {
     private var next = 0 // Llevar track del current id que se trabaje
     fun newId() = next++
+    fun reset() { next = 0}
 }
 
 fun newState(accepted: Boolean = false) = State(NfaId.newId(), isAccepted = accepted)
@@ -486,17 +485,178 @@ fun kleeneFragment(fragment: Fragment): Fragment {
     addEpsilonTransition(fragment.final_state, fragment.initial_state)
 
     // Final del fragment, al final del que se esta construyendo
-    addEpsilonTransition(fragment.final_state, final_state)
+    addEpsilonTransition(fragment.final_state, finalState)
 
     /// del initial directo al final
     addEpsilonTransition(initialState, finalState)
 
     return Fragment(initialState, finalState)
 }
+// =========================================================
+private const val EPSILON_STR = "ε"
 
+fun parseCharClass(token: String): Set<Char> {
+    require(token.startsWith("[") && token.endsWith("]")) { "Clase inválida: $token" }
+    val set = mutableSetOf<Char>()
+    var i = 1
+    while (i < token.length - 1) {
+        val ch = token[i]
+        if (ch == '\\' && i + 1 < token.length - 1) {
+            set += token[i + 1]
+            i += 2
+        } else if (i + 2 < token.length - 1 && token[i + 1] == '-') {
+            // rango a-b
+            val start = ch
+            val end = token[i + 2]
+            require(start <= end) { "Rango inválido en clase: $token" }
+            for (c in start..end) set += c
+            i += 3
+        } else {
+            set += ch
+            i += 1
+        }
+    }
+    return set
+}
+
+fun buildNFA(tokens: List<String>): Fragment {
+    val stack = ArrayDeque<Fragment>()
+
+    fun isTokenUnary(token: String) = token.length == 1 && token[0] in UNARY_OPERATORS
+    fun isTokenBinary(token: String) = token.length == 1 && token[0] in BINARY_OPERATORS
+
+    for(token in tokens) {
+        when {
+            isTokenBinary(token) -> {
+                //Sacar los 2 fragments
+                val right = stack.removeFirst()
+                val left = stack.removeFirst()
+
+                // Usar funcion acorde a operador
+                val fragment = when(token[0]){
+                    '.' -> concatFragment(left, right)
+                    '|' -> unionFragment(left, right)
+                    '*' -> kleeneFragment(left)
+                    else -> error("Hubo un error")
+                }
+
+                //Meter el fragmento resultante
+                stack.addFirst(fragment)
+            }
+
+            isTokenUnary(token) -> {
+                val fragment = stack.removeFirst()
+
+                val newFragment = when(token[0]){
+                    '*' -> kleeneFragment(fragment)
+                    else -> error("Ni tendria que venir, se tuvo que sustituir")
+                }
+
+                stack.addFirst(newFragment)
+            }
+
+            else -> {
+                val fragment = when {
+                    // va a venir por la sustitucion de ?
+                    token == "ε" -> {
+                        val initialState = newState()
+                        val finalState = newState(true)
+                        addEpsilonTransition(initialState, finalState)
+                        Fragment(initialState, finalState)
+                    }
+
+                    token.startsWith("\\") && token.length == 2 -> {
+                        literalFragment(token[1]) //slatarse el scape char
+                    }
+
+                    token.startsWith("[") && token.endsWith("]") -> {
+                        val charSet = parseCharClass(token)
+                        classFragment(charSet)
+                    }
+                    token.length == 1 -> {
+                        literalFragment(token[0])
+                    }
+                    else -> error("Token invalido: $token")
+                }
+                
+                stack.addFirst(fragment)
+            }
+        }
+    }
+
+    return stack.removeFirst()
+}
+// =========================================================
+
+// ---------------------------------------------------------------
+// DOT para visualizar NFA
+private fun bfsRenumber(start: State): Map<Int, Int> {
+    val order = mutableListOf<State>()
+    val seen = mutableSetOf<Int>()
+    val q = ArrayDeque<State>()
+    q.addLast(start)
+    seen.add(start.id)
+    while (q.isNotEmpty()) {
+        val s = q.removeFirst()
+        order += s
+        for (e in s.next_states) {
+            val to = e.movedToState
+            if (seen.add(to.id)) q.addLast(to)
+        }
+    }
+    return order.withIndex().associate { (newId, st) -> st.id to newId }
+}
+
+fun generateNfaDot(nfa: Fragment): String {
+    val sb = StringBuilder()
+    sb.appendLine("digraph NFA {")
+    sb.appendLine("  rankdir=LR;")
+    sb.appendLine("  node [shape=circle];")
+
+    // renumeración solo para mostrar
+    val idMap = bfsRenumber(nfa.initial_state)
+    fun show(id: Int) = idMap[id] ?: error("id no mapeado: $id")
+
+    // flecha de inicio (siempre al 0)
+    sb.appendLine("  __start__ [shape=point, label=\"\"];")
+    sb.appendLine("  __start__ -> ${show(nfa.initial_state.id)};")
+
+    // recorrer y emitir usando los ids "bonitos"
+    val visited = mutableSetOf<Int>()
+    val stack = ArrayDeque<State>()
+    stack.addFirst(nfa.initial_state)
+
+    fun labelOf(edge: NextState): String = when {
+        edge.symbol != null   -> edge.symbol.toString()
+        edge.charSet != null  -> "[" + edge.charSet.sorted().joinToString("") + "]"
+        else                  -> "ε"
+    }
+
+    while (stack.isNotEmpty()) {
+        val s = stack.removeFirst()
+        if (!visited.add(s.id)) continue
+
+        val shownId = show(s.id)
+        if (s.isAccepted) {
+            sb.appendLine("  $shownId [shape=doublecircle];")
+        } else {
+            sb.appendLine("  $shownId [shape=circle];")
+        }
+
+        for (e in s.next_states) {
+            val toShown = show(e.movedToState.id)
+            sb.appendLine("  $shownId -> $toShown [label=\"${labelOf(e)}\"];")
+            if (e.movedToState.id !in visited) stack.addFirst(e.movedToState)
+        }
+    }
+
+    sb.appendLine("}")
+    return sb.toString()
+}
+//////////////////////////////////////////////
 
 fun main() {
-    val file = File("src/main/kotlin/Ast.txt")
+    val file = File("src/main/kotlin/AFN.txt")
     val lines = file.readLines()
 
     val formattedLines = ArrayList<String>()
@@ -504,54 +664,29 @@ fun main() {
     // Cambiar ? a |ε
     // Cambiar + a aa*
     for (line in lines) {
-        var linea_formateada = sustituirOpcional(line)
-        linea_formateada = sustituirMas(linea_formateada)
-        formattedLines.add(linea_formateada)
+        var formattedLine = sustituirOpcional(line)
+        formattedLine = sustituirMas(formattedLine)
+        formattedLines.add(formattedLine)
     }
 
     println("Lineas formateadas: $formattedLines")
 
-    // Construccion de AST
-    for ((index, line) in formattedLines.withIndex()) {
-        val postfixStr = infixToPostfix(line)
-        println("Postfix: $postfixStr")
-        val tokens = tokenize(postfixStr)
-        println("Tokens: $tokens")
+    // Construccion de AFN
+    for((index, formattedLine) in formattedLines.withIndex()) {
+        // infix a postfix
+        val postfix = infixToPostfix(formattedLine)
 
-        [a, b, ., c, .]
+        // tokenizar
+        val tokens = tokenize(postfix)
 
-        val stack = ArrayDeque<TreeNode<String>>()
+        /// Constuir AFN
+        NfaId.reset()
+        val nfa = buildNFA(tokens)
 
-        for (tok in tokens) {
-            when {
-                // operador binario
-                tok.length == 1 && tok[0] in BINARY_OPERATORS -> {
-                    val right = stack.removeFirst()
-                    val left = stack.removeFirst()
-                    val node = TreeNode(tok)
-                    node.addChild(left)
-                    node.addChild(right)
-                    stack.addFirst(node)
-                }
-                // operador unario
-                tok.length == 1 && tok[0] in UNARY_OPERATORS -> {
-                    val child = stack.removeFirst()
-                    val node = TreeNode(tok)
-                    node.addChild(child)
-                    stack.addFirst(node)
-                }
-                else -> {
-                    // operando (literal, clase, escape, ε)
-                    stack.addFirst(TreeNode(tok))
-                }
-            }
-        }
-
-        // Obtener raíz y renderizar
-        val root = stack.removeFirst()
-        val dot  = generateDot(root)
-        val outputFile = File("ast_$index.png")
-        renderDot(dot, outputFile)
-        println("AST generado en: ${outputFile.absolutePath}")
+        //Generar dot
+        val dot = generateNfaDot(nfa)
+        val dotFile = File("nfa_$index.png")
+        renderDot(dot, dotFile)
     }
+    
 }
