@@ -388,10 +388,31 @@ fun renderDot(dotSource: String, outputFile: File) {
 // LABORATORIO 4 -------------------------------------------------
 data class AFN_State(
     val id: Int,
-    val prev_state: AFN_State? //nulo para cuando es el estado inicial
-    val next_state: AFN_State? //nulo para cuando es el estado final
+    val prev_state: AFN_State[]? //nulo para cuando es el estado inicial
+    val next_state: AFN_State[]? //nulo para cuando es el estado final
     val entry_symbol: Char? //nulo para cuando es el estado final
 )
+
+// Metodo para recorrer arbol como inorder
+// visit se ejecuta en cada nodo, solo es para tener nocion
+// del recorrido
+fun inorderTree(node: TreeNode<String>, visit: (String) -> Unit){
+    when (node.children.size){
+        0 -> visit(node.value) // Es una hoja
+        1 -> {
+            inorderTree(node.children[0], visit) // recorrer un hijo
+            visit(node.value)
+        }
+        2 -> {
+            inorderTree(node.children[0], visit) // recorrer el hijo izquierdo
+            visit(node.value)
+            inorderTree(node.children[1], visit) // recorrer el hijo derecho
+        }
+        else -> throw IllegalArgumentException("Nodo con más de 2 hijos")
+    }
+} 
+
+
 
 
 
