@@ -385,11 +385,16 @@ fun renderDot(dotSource: String, outputFile: File) {
 
 // LABORATORIO 4 -------------------------------------------------
 // Base
-data class State(
+class State(
     val id: Int,
     val next_states: MutableList<NextState> = mutableListOf(),
     var isAccepted: Boolean = false
-)
+) {
+    override fun equals(other: Any?): Boolean =
+        other is State && this.id == other.id
+
+    override fun hashCode(): Int = id
+}
 
 data class NextState(
     val movedToState: State,
@@ -658,7 +663,7 @@ val FirstRegexStringsTest = listOf(
     "",
     "a",
     "b",
-    "ab"
+    "ab",
     "ba",
     "aa",
     "bb",
@@ -698,7 +703,64 @@ val FourthRegexStringsTest = listOf(
     "0",
     "holamundo",
 )
+
+val Tests = listOf(
+    FirstRegexStringsTest,
+    SecondRegexStringsTest,
+    ThirdRegexStringsTest,
+    FourthRegexStringsTest
+)
+
 //////////////////////////////////////////////
+// E-clausure
+fun epsilonClosure(states: Set<State>): Set<State>{
+    val result = states.toMutableSet()
+    val stack = ArrayDeque<State>()
+
+    states.forEach { stack.addFirst(it) }
+
+    while(stack.isNotEmpty()){
+        val state = stack.removeFirst()
+        for(nextState in state.next_states){
+            if(nextState.symbol == null && nextState.charSet == null){
+                if(result.add(nextState.movedToState)){
+                    stack.addLast(nextState.movedToState)
+                }
+            }
+        }
+    }
+
+    return result
+}
+
+// Move func
+fun move(states: Set<State>, symbol: Char): Set<State>{
+    val result = mutableSetOf<State>()
+    for(state in states){
+        for(nextState in state.next_states){
+            if(nextState.symbol != null && nextState.symbol == symbol){
+                result.add(nextState.movedToState)
+            } else if (nextState.charSet != null && symbol in nextState.charSet){
+                result.add(nextState.movedToState)
+            }
+        }
+    }
+
+    return result
+}
+
+// Determinar aceptacion
+fun acceptsString(nfa: Fragment, input: String): Boolean {
+    var currentState = epsilonClosure(setOf(nfa.initial_state))
+
+    for(symbol in input){
+        val next = move(currentState, symbol)
+        currentState = if (next.isEmpty()) emptySet() else epsilonClosure(next)
+        if (currentState.isEmpty()) break
+    }
+
+    return currentState.any { it.isAccepted }
+}
 
 
 //////////////////////////////////////////////
@@ -720,6 +782,7 @@ fun main() {
 
     // Construccion de AFN
     for((index, formattedLine) in formattedLines.withIndex()) {
+
         // infix a postfix
         val postfix = infixToPostfix(formattedLine)
 
@@ -730,10 +793,18 @@ fun main() {
         NfaId.reset()
         val nfa = buildNFA(tokens)
 
-        //Generar dot
+        //Generar AFN - Grafo
         val dot = generateNfaDot(nfa)
         val dotFile = File("nfa_$index.png")
         renderDot(dot, dotFile)
+
+        // Testear cadenas
+        var test2Validate = Tests[index]
+        for(test in test2Validate){
+            val result = acceptsString(nfa, test)
+            println("Cadena $test es ACEPTADA: ${if (result) "SÍ" else "NO"}")
+        }
+        println("----------------------------------------------------------")
     }
     
 }
