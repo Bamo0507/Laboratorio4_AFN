@@ -390,7 +390,7 @@ fun renderDot(dotSource: String, outputFile: File) {
 data class State(
     val id: Int,
     val next_states: MutableList<NextState> = mutableListOf(),
-    var isAccept: Boolean = false
+    var isAccepted: Boolean = false
 )
 
 data class NextState(
@@ -410,23 +410,89 @@ object NfaId {
     fun newId() = next++
 }
 
-fun newState(accepted: Boolean = false) = State(NfaId.newId(), isAccept = accepted)
+fun newState(accepted: Boolean = false) = State(NfaId.newId(), isAccepted = accepted)
 
 fun addEpsilonTransition(from: State, to: State){
     from.next_states += NextState(to, null, null)
 }
 
 fun addTransition(from: State, to: State, symbol: Char){
-    from.next_states += NextState(to, char, null)
+    from.next_states += NextState(to, symbol, null)
 }
 
 fun addCharSetTransition(from: State, to: State, charSet: Set<Char>){
     from.next_states += NextState(to, null, charSet)
 }
 //====================================================================
+// Simbolo literal
+fun literalFragment(symbol: Char): Fragment{
+    val initialState = newState()
+    val final_state = newState(true)
 
+    addTransition(from = initialState, to = final_state, symbol = symbol)
 
+    return Fragment(initialState, final_state)
+}
 
+// Clase de caracteres (validar si se maneja con ORs)
+fun classFragment(charSet: Set<Char>): Fragment{
+    val initialState = newState()
+    val final_state = newState(true)
+
+    addCharSetTransition(from = initialState, to = final_state, charSet = charSet)
+
+    return Fragment(initialState, final_state)
+}
+
+// Concatenacion
+fun concatFragment(initFragment: Fragment, finalFragment: Fragment): Fragment {
+    //El final del initial fragment deja de ser el final aka ya no es aceptacion
+    initFragment.final_state.isAccepted = false
+    addEpsilonTransition(initFragment.final_state, finalFragment.initial_state)
+    return Fragment(initFragment.initial_state, finalFragment.final_state)
+}
+
+// Union
+fun unionFragment(upperFragment: Fragment, lowerFragment: Fragment): Fragment {
+    val initialState = newState()
+    val finalState = newState(true)
+
+    // Los finales de los fragments anteriores se vuelven inaceptables
+    upperFragment.final_state.isAccepted = false
+    lowerFragment.final_state.isAccepted = false
+
+    // Transiciones
+    addEpsilonTransition(initialState, upperFragment.initial_state)
+    addEpsilonTransition(initialState, lowerFragment.initial_state)
+
+    addEpsilonTransition(upperFragment.final_state, finalState)
+    addEpsilonTransition(lowerFragment.final_state, finalState)
+
+    return Fragment(initialState, finalState)
+}
+
+// Kleene 
+fun kleeneFragment(fragment: Fragment): Fragment {
+    val initialState = newState()
+    val finalState = newState(true)
+
+    // Resetear el final state del fragment a que no sea de aceptacion
+    fragment.final_state.isAccepted = false
+
+    // Nuevo inicial al inicial del fragment
+    addEpsilonTransition(initialState, fragment.initial_state)
+
+    // Final del gragment, hacia su inicial
+    addEpsilonTransition(fragment.final_state, fragment.initial_state)
+
+    // Final del fragment, al final del que se esta construyendo
+    addEpsilonTransition(fragment.final_state, final_state)
+
+    /// del initial directo al final
+    addEpsilonTransition(initialState, finalState)
+
+    return Fragment(initialState, finalState)
+}
 
 
 fun main() {
